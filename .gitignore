@@ -1,26 +1,13 @@
-# Private configuration
 config.py
-
-# Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
 .venv/
 venv/
 env/
-
-# Logs and exports
+exports/
 logs/
 *.log
-exports/
-*.json
-*.csv
-
-# Editors
 .vscode/
 .idea/
-
-# Windows
 Thumbs.db
 Desktop.ini
