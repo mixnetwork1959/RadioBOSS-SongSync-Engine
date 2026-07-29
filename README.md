@@ -1,6 +1,6 @@
 # RadioBOSS SongSync Engine
 
-**Version 1.2.1**
+**Version 1.3.0**
 
 RadioBOSS SongSync Engine reads the RadioBOSS MySQL music library and generates secure JSON catalog files for the [RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
 
@@ -9,6 +9,50 @@ It can automatically upload the generated catalog to a web server using SFTP.
 > [!IMPORTANT]
 > SongSync does not modify the RadioBOSS database.
 > It only reads music-library information and creates export files.
+
+## Windows EXE installation (recommended)
+
+Windows users can run SongSync without installing Python or additional packages.
+
+1. Download `RadioBOSS-SongSync-Windows-v1.3.0.zip` from the latest GitHub release.
+2. Extract the ZIP file to a permanent directory, for example:
+
+   ```text
+   C:\RadioBOSS-SongSync
+   ```
+
+3. Copy `config.example.py` to:
+
+   ```text
+   config.py
+   ```
+
+4. Open `config.py` and enter the RadioBOSS MySQL and SFTP settings.
+5. If SSH key authentication is used, place the private key in the same directory and configure:
+
+   ```python
+   SFTP_PRIVATE_KEY_FILE = "sftp_key"
+   ```
+
+6. Start SongSync using `run_songsync.bat` or directly:
+
+   ```text
+   RadioBOSS-SongSync.exe
+   ```
+
+The generated catalog files are written to the local `exports` directory. If SFTP is enabled, the files are uploaded automatically after a successful export.
+
+Python is not required for the Windows EXE version.
+
+### Private files
+
+Never publish or share these files:
+
+- `config.py`
+- `sftp_key`
+- `sftp_key.pub`
+- `sftp_known_hosts`
+- files generated inside `exports`
 
 ## Companion project
 
@@ -101,11 +145,16 @@ Example:
 
 ## Requirements
 
+### Windows EXE
+
 - Windows 10 or Windows 11
-- Python 3.10 or newer
 - RadioBOSS using a MySQL music library
 - Read access to the RadioBOSS MySQL database
 - Internet access for optional SFTP uploads
+
+### Python source version
+
+- Python 3.10 or newer
 
 Required Python packages:
 
@@ -189,7 +238,13 @@ When enabled, SongSync displays a small selection of public catalog entries afte
 
 ## Running SongSync
 
-Run:
+Windows EXE:
+
+```bat
+run_songsync.bat
+```
+
+Python source version:
 
 ```bat
 py songsync.py
@@ -311,8 +366,13 @@ Example:
 
 ```bat
 @echo off
-cd /d "D:\radioboss-song-sync"
-py songsync.py
+cd /d "%~dp0"
+
+if exist "RadioBOSS-SongSync.exe" (
+    RadioBOSS-SongSync.exe
+) else (
+    py songsync.py
+)
 ```
 
 RadioBOSS scheduler command:
@@ -376,6 +436,12 @@ logs/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# PyInstaller
+build/
+dist/
+*.spec
+*.exe
 ```
 
 ## Duplicate handling
@@ -442,6 +508,7 @@ RadioBOSS-SongSync-Engine/
 |-- LICENSE
 |-- README.md
 |-- requirements.txt
+|-- run_songsync.bat
 `-- songsync.py
 ```
 
@@ -450,7 +517,7 @@ Private and generated files are not included in the repository.
 ## Current versions
 
 ```text
-SongSync Engine:              1.2.1
+SongSync Engine:              1.3.0
 MySQL connector requirement: 9.x
 SFTP library:                AsyncSSH 2.20 or newer
 ```

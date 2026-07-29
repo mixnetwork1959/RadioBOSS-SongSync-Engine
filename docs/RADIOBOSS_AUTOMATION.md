@@ -20,7 +20,7 @@ RadioBOSS starts a Windows batch file at a configured time.
 The batch file:
 
 1. Opens the SongSync directory
-2. Starts `songsync.py`
+2. Starts `RadioBOSS-SongSync.exe` or the Python source version
 3. Reads the RadioBOSS MySQL library
 4. Generates the JSON catalog
 5. Uploads the files using SFTP
@@ -35,7 +35,7 @@ RadioBOSS Scheduler
 run_songsync.bat
         |
         v
-songsync.py
+RadioBOSS-SongSync.exe
         |
         +-- MySQL export
         |
@@ -47,13 +47,15 @@ songsync.py
 ## Requirements
 
 - RadioBOSS computer remains switched on
-- Python is installed
 - SongSync works manually
 - `config.py` is complete
 - MySQL is available
 - Internet connection is available
 - SFTP authentication works
 - The RadioBOSS Scheduler is enabled
+
+Python is required only when using `songsync.py`. It is not required
+for the recommended Windows EXE.
 
 ## 1. Create the batch file
 
@@ -69,29 +71,26 @@ Example project directory:
 D:\radioboss-song-sync
 ```
 
-Basic batch-file content:
-
-```bat
-@echo off
-cd /d "D:\radioboss-song-sync"
-py songsync.py
-```
-
-When RadioBOSS starts this file, a command window opens, SongSync runs and the window closes when processing finishes.
-
-## Portable batch-file version
-
-If `run_songsync.bat` is stored in the same directory as `songsync.py`, this version does not require a hardcoded project path:
+Use this portable batch-file content:
 
 ```bat
 @echo off
 cd /d "%~dp0"
-py songsync.py
+
+if exist "RadioBOSS-SongSync.exe" (
+    RadioBOSS-SongSync.exe
+) else (
+    py songsync.py
+)
 ```
 
 `%~dp0` means the directory containing the batch file.
 
-This is the recommended version for public installations.
+The batch file starts the Windows EXE when it exists. Otherwise, it
+starts the Python source version.
+
+When RadioBOSS starts this file, a command window opens, SongSync
+runs and the window closes when processing finishes.
 
 ## Batch file with a last-run log
 
@@ -105,7 +104,11 @@ cd /d "%~dp0"
 
 if not exist "logs" mkdir "logs"
 
-py songsync.py > "logs\songsync-last-run.log" 2>&1
+if exist "RadioBOSS-SongSync.exe" (
+    RadioBOSS-SongSync.exe > "logs\songsync-last-run.log" 2>&1
+) else (
+    py songsync.py > "logs\songsync-last-run.log" 2>&1
+)
 ```
 
 The latest result is stored in:
@@ -290,8 +293,7 @@ Choose a time appropriate for the station.
 SongSync can still be run manually at any time:
 
 ```bat
-cd /d D:\radioboss-song-sync
-py songsync.py
+run_songsync.bat
 ```
 
 This is useful after:
@@ -352,7 +354,13 @@ Check that the file path in the RadioBOSS event is correct.
 
 ### The py command is not found
 
-Use the full Python executable path in the batch file.
+This error applies only to the Python source version.
+
+The recommended solution is to use `RadioBOSS-SongSync.exe`, which
+does not require Python.
+
+Alternatively, use the full Python executable path in the batch
+file.
 
 Example:
 
@@ -379,7 +387,11 @@ cd /d "%~dp0"
 
 if not exist "logs" mkdir "logs"
 
-py songsync.py > "logs\songsync-last-run.log" 2>&1
+if exist "RadioBOSS-SongSync.exe" (
+    RadioBOSS-SongSync.exe > "logs\songsync-last-run.log" 2>&1
+) else (
+    py songsync.py > "logs\songsync-last-run.log" 2>&1
+)
 ```
 
 Then inspect:

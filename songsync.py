@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.0.0
+# Version 1.3.0
 # songsync.py
 # ==========================================================
 
@@ -10,11 +10,13 @@ import asyncio
 import hashlib
 import json
 import posixpath
+import runpy
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable
 
 try:
@@ -35,21 +37,38 @@ except ImportError:
     raise SystemExit(1)
 
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"
+
+
+def application_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+
+    return Path(__file__).resolve().parent
+
+
+APP_DIR = application_dir()
+
+
+def resolve_local_path(value: str) -> Path:
+    path = Path(value).expanduser()
+
+    if path.is_absolute():
+        return path
+
+    return APP_DIR / path
 
 
 def load_config():
-    try:
-        import config
-    except ModuleNotFoundError as exc:
-        if exc.name == "config":
-            print("ERROR: config.py was not found.")
-            print("Copy config.example.py to config.py and enter your settings.")
-            raise SystemExit(1) from exc
+    config_path = APP_DIR / "config.py"
 
-        print("ERROR while loading config.py:")
-        print(exc)
-        raise SystemExit(1) from exc
+    if not config_path.is_file():
+        print(f"ERROR: config.py was not found in: {APP_DIR}")
+        print("Copy config.example.py to config.py and enter your settings.")
+        raise SystemExit(1)
+
+    try:
+        config = runpy.run_path(str(config_path))
     except Exception as exc:
         print("ERROR while loading config.py:")
         print(f"{type(exc).__name__}: {exc}")
@@ -69,7 +88,7 @@ def load_config():
         "SFTP_ENABLED",
     ]
 
-    missing = [name for name in required if not hasattr(config, name)]
+    missing = [name for name in required if name not in config]
 
     if missing:
         print("ERROR: Missing setting(s) in config.py:")
@@ -77,13 +96,19 @@ def load_config():
             print(f"  - {name}")
         raise SystemExit(1)
 
-    return config
+    public_settings = {
+        name: value
+        for name, value in config.items()
+        if not name.startswith("__")
+    }
+
+    return SimpleNamespace(**public_settings)
 
 
 CONFIG = load_config()
 
-PUBLIC_DIR = Path(CONFIG.PUBLIC_EXPORT_DIR)
-PRIVATE_DIR = Path(CONFIG.PRIVATE_EXPORT_DIR)
+PUBLIC_DIR = resolve_local_path(CONFIG.PUBLIC_EXPORT_DIR)
+PRIVATE_DIR = resolve_local_path(CONFIG.PRIVATE_EXPORT_DIR)
 
 SONGS_FILE = PUBLIC_DIR / "songs.json"
 ARTISTS_FILE = PUBLIC_DIR / "artists.json"
@@ -271,7 +296,6 @@ def validate_sftp_config() -> None:
     text_settings = [
         "SFTP_HOST",
         "SFTP_USERNAME",
-        "SFTP_PASSWORD",
         "SFTP_REMOTE_PUBLIC_DIR",
         "SFTP_REMOTE_PRIVATE_DIR",
         "SFTP_KNOWN_HOSTS_FILE",
@@ -294,9 +318,18 @@ def validate_sftp_config() -> None:
     if int(CONFIG.SFTP_TIMEOUT) < 1:
         raise RuntimeError("SFTP_TIMEOUT must be at least 1 second.")
 
+    password = str(CONFIG.SFTP_PASSWORD).strip()
     private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
 
-    if private_key_file and not Path(private_key_file).expanduser().is_file():
+    if not password and not private_key_file:
+        raise RuntimeError(
+            "Enter SFTP_PASSWORD or SFTP_PRIVATE_KEY_FILE."
+        )
+
+    if (
+        private_key_file
+        and not resolve_local_path(private_key_file).is_file()
+    ):
         raise RuntimeError(
             f"SFTP private key file was not found: {private_key_file}"
         )
@@ -365,14 +398,14 @@ async def upload_exports_async() -> None:
     host = str(CONFIG.SFTP_HOST).strip()
     port = int(CONFIG.SFTP_PORT)
     username = str(CONFIG.SFTP_USERNAME)
-    password = str(CONFIG.SFTP_PASSWORD)
+    password = str(CONFIG.SFTP_PASSWORD).strip()
     timeout = int(CONFIG.SFTP_TIMEOUT)
-    known_hosts_file = Path(CONFIG.SFTP_KNOWN_HOSTS_FILE).expanduser()
+    known_hosts_file = resolve_local_path(CONFIG.SFTP_KNOWN_HOSTS_FILE)
     private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
     private_key_passphrase = str(CONFIG.SFTP_PRIVATE_KEY_PASSPHRASE)
 
     client_keys = (
-        [str(Path(private_key_file).expanduser())]
+        [str(resolve_local_path(private_key_file))]
         if private_key_file
         else []
     )
@@ -395,7 +428,7 @@ async def upload_exports_async() -> None:
         host,
         port=port,
         username=username,
-        password=password,
+        password=password or None,
         known_hosts=known_hosts,
         client_keys=client_keys,
         passphrase=private_key_passphrase or None,

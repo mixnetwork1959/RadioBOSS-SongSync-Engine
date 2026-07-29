@@ -179,11 +179,14 @@ Enable SFTP:
 SFTP_ENABLED = True
 ```
 
-Run:
+Run the portable launcher:
 
 ```bat
-py songsync.py
+run_songsync.bat
 ```
+
+The launcher uses `RadioBOSS-SongSync.exe` when available and
+otherwise starts the Python source version.
 
 A successful upload displays:
 
@@ -300,13 +303,15 @@ SFTP_PRIVATE_KEY_PASSPHRASE = "CHANGE_ME"
 The private-key passphrase is different from the SFTP account password.
 
 SongSync may keep the account password configured as a fallback.
+When private-key authentication works, `SFTP_PASSWORD` may also be
+left empty.
 
 ## 11. Test the SSH-key connection
 
 Run:
 
 ```bat
-py songsync.py
+run_songsync.bat
 ```
 
 A successful result displays:
@@ -419,7 +424,8 @@ Check:
 SFTP_PRIVATE_KEY_FILE = "sftp_key"
 ```
 
-Confirm that `sftp_key` is in the same directory from which SongSync is started.
+Confirm that `sftp_key` is in the same directory as
+`RadioBOSS-SongSync.exe` or `songsync.py`.
 
 An absolute path may also be used:
 
@@ -504,6 +510,9 @@ SFTP_ENABLED = True
 ```
 
 ### AsyncSSH is not installed
+
+This message applies only to the Python source version. The Windows
+EXE already includes the required SFTP components.
 
 Run:
 

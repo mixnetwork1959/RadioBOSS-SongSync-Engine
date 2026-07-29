@@ -13,10 +13,14 @@ For automatic daily execution, see:
 ## Requirements
 
 - Windows 10 or Windows 11
-- Python 3.10 or newer
 - RadioBOSS with a MySQL music library
 - MySQL credentials with read access
 - Internet access for optional SFTP uploads
+
+The recommended Windows EXE does not require Python.
+
+Python 3.10 or newer is required only when running SongSync from
+the source code.
 
 SongSync reads these RadioBOSS MySQL tables:
 
@@ -33,7 +37,13 @@ Download the latest release from:
 
 https://github.com/mixnetwork1959/RadioBOSS-SongSync-Engine/releases
 
-Extract the ZIP file to a permanent directory.
+Choose one of these downloads:
+
+- `RadioBOSS-SongSync-Windows-v1.3.0.zip` for the recommended
+  Windows EXE
+- Source code for users who want to run SongSync with Python
+
+Extract the selected ZIP file to a permanent directory.
 
 Example:
 
@@ -43,7 +53,32 @@ D:\radioboss-song-sync
 
 Do not run SongSync directly from the Downloads folder or from inside the ZIP archive.
 
-## 2. Check Python
+## 2. Windows EXE installation (recommended)
+
+The Windows package includes:
+
+```text
+RadioBOSS-SongSync.exe
+config.example.py
+run_songsync.bat
+README.md
+LICENSE
+docs\
+```
+
+No Python installation and no additional Python packages are
+required.
+
+Continue with:
+
+[Create the private configuration](#4-create-the-private-configuration)
+
+## 3. Python source installation
+
+This section is required only when running `songsync.py` instead
+of the Windows EXE.
+
+### Check Python
 
 Open a command prompt and run:
 
@@ -67,7 +102,7 @@ During installation, enable:
 Add Python to PATH
 ```
 
-## 3. Install required packages
+### Install required packages
 
 Open a command prompt in the SongSync directory:
 
@@ -237,7 +272,21 @@ This ensures that SongSync creates the files locally without uploading anything.
 
 ## 9. Run the first local export
 
+### Windows EXE
+
 From the SongSync directory, run:
+
+```bat
+run_songsync.bat
+```
+
+You can also start the executable directly:
+
+```bat
+RadioBOSS-SongSync.exe
+```
+
+### Python source version
 
 ```bat
 py songsync.py
@@ -246,7 +295,7 @@ py songsync.py
 A normal start looks similar to:
 
 ```text
-RadioBOSS SongSync Engine v1.2.1
+RadioBOSS SongSync Engine v1.3.0
 Connecting to RadioBOSS MySQL database...
 Connection successful.
 Reading tracks2 and taginfo...
@@ -402,7 +451,7 @@ Before updating:
 1. Keep a private backup of `config.py`.
 2. Keep a private backup of the SSH private key when used.
 3. Download the new release.
-4. Replace the program files.
+4. Replace `RadioBOSS-SongSync.exe` or the Python source files.
 5. Do not overwrite the working `config.py`.
 6. Run a manual test before relying on the scheduled event.
 
@@ -435,6 +484,8 @@ config.py
 Then enter the real settings.
 
 ### mysql-connector-python is not installed
+
+This message applies only to the Python source version.
 
 Run:
 
