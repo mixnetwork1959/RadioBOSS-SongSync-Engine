@@ -1,5 +1,10 @@
 # RadioBOSS SongSync Engine
 
+## Companion project
+
+SongSync generates the catalog files required by the
+[RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
+
 ## Version 1.0.0
 
 RadioBOSS SongSync Engine reads the RadioBOSS MySQL database and creates
