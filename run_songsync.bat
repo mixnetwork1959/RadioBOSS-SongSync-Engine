@@ -1,3 +1,8 @@
 @echo off
-cd /d "D:\radioboss-song-sync"
-py songsync.py
+cd /d "%~dp0"
+
+if exist "RadioBOSS-SongSync.exe" (
+    RadioBOSS-SongSync.exe
+) else (
+    py songsync.py
+)
