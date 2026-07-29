@@ -1,95 +1,126 @@
 # RadioBOSS SongSync Engine
 
+**Version 1.2.1**
+
+RadioBOSS SongSync Engine reads the RadioBOSS MySQL music library and generates secure JSON catalog files for the [RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
+
+It can automatically upload the generated catalog to a web server using SFTP.
+
+> [!IMPORTANT]
+> SongSync does not modify the RadioBOSS database.
+> It only reads music-library information and creates export files.
+
 ## Companion project
 
-SongSync generates the catalog files required by the
-[RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
+SongSync is designed to work with:
 
-## Version 1.0.0
+[RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system)
 
-RadioBOSS SongSync Engine reads the RadioBOSS MySQL database and creates
-JSON files for a database-free website song request system.
+Both projects are required for the complete web-based request system:
 
-## Data flow
+1. SongSync reads the RadioBOSS music library.
+2. SongSync generates public and private JSON files.
+3. The files are uploaded to the web server.
+4. The request website uses the files for search and secure requests.
+5. Requested songs are sent to RadioBOSS through its Remote Control API.
+
+## Features
+
+- Reads the RadioBOSS MySQL music library
+- Uses the `tracks2` and `taginfo` tables
+- Excludes invalid or disabled tracks
+- Excludes tracks without artist, title or filename
+- Removes duplicate artist/title combinations
+- Creates a public song catalog
+- Creates artist and genre lists
+- Creates catalog information and statistics
+- Creates a private RadioBOSS filename lookup
+- Creates a duplicate report
+- Writes JSON files atomically
+- Supports automatic SFTP uploads
+- Supports SFTP password authentication
+- Supports SSH private-key authentication
+- Verifies the SFTP server identity
+- Keeps database and SFTP credentials private
+- Can be started automatically from the RadioBOSS Scheduler
+
+## Generated files
+
+### Public files
+
+The following files may be uploaded to the public web directory:
 
 ```text
-RadioBOSS MySQL
-       |
-       v
-SongSync Engine
-       |
-       +-- public/songs.json
-       +-- public/artists.json
-       +-- public/genres.json
-       +-- public/info.json
-       |
-       +-- private/lookup.json
-       +-- private/duplicates.log
+exports/public/songs.json
+exports/public/artists.json
+exports/public/genres.json
+exports/public/info.json
 ```
 
-## Public files
+`songs.json` contains only:
 
-### `songs.json`
+- Track ID
+- Artist
+- Title
 
-Contains only:
+Example:
 
 ```json
-{
-  "track_id": 11698,
-  "artist": "2pac",
-  "title": "Dear Mama"
-}
+[
+  {
+    "track_id": 11698,
+    "artist": "2pac",
+    "title": "Dear Mama"
+  }
+]
 ```
 
-It does not reveal local filenames.
+### Private files
 
-### `artists.json`
+The following files contain private information:
 
-Unique artist names for autocomplete or filters.
+```text
+exports/private/lookup.json
+exports/private/duplicates.log
+```
 
-### `genres.json`
+`lookup.json` connects a public track ID to the real RadioBOSS filename.
 
-Unique genres from RadioBOSS tags.
-
-### `info.json`
-
-Contains generation time, counts and a catalog hash.
-
-## Private files
-
-### `lookup.json`
-
-Maps a `track_id` to the local RadioBOSS filename:
+Example:
 
 ```json
 {
   "11698": {
-    "filename": "d:\\music\\top_10\\70-1999\\2pac - dear mama.mp3"
+    "filename": "D:\\Music\\Pop\\2pac - Dear Mama.mp3"
   }
 }
 ```
 
-This file must not be publicly downloadable.
+> [!WARNING]
+> `lookup.json` contains local music paths and must never be publicly downloadable.
 
-### `duplicates.log`
+## Requirements
 
-Shows which RadioBOSS record was retained and which equal artist/title
-records were ignored.
+- Windows 10 or Windows 11
+- Python 3.10 or newer
+- RadioBOSS using a MySQL music library
+- Read access to the RadioBOSS MySQL database
+- Internet access for optional SFTP uploads
 
-## Duplicate rule
+Required Python packages:
 
 ```text
-same normalized artist + same normalized title = one public song
+mysql-connector-python>=9.0,<10.0
+asyncssh>=2.20
 ```
-
-The first matching RadioBOSS record is retained. Its real `track_id` and
-filename stay together.
 
 ## Installation
 
-Install the dependency:
+Clone or download this repository.
 
-```text
+Open a command prompt in the project directory and install the required packages:
+
+```bat
 py -m pip install -r requirements.txt
 ```
 
@@ -105,22 +136,339 @@ to:
 config.py
 ```
 
-Enter the MySQL settings and run:
+Enter the real MySQL and optional SFTP settings in `config.py`.
+
+> [!IMPORTANT]
+> Never upload `config.py` to GitHub. It contains private credentials.
+
+For complete setup instructions, see:
+
+[Installation Guide](docs/INSTALLATION.md)
+
+## MySQL configuration
+
+Example:
+
+```python
+DB_HOST = "127.0.0.1"
+DB_PORT = 3306
+DB_NAME = "radioboss"
+DB_USER = "radioboss_readonly"
+DB_PASSWORD = "CHANGE_ME"
+DB_CHARSET = "utf8mb4"
+```
+
+A dedicated read-only MySQL user is strongly recommended.
+
+The MySQL user requires read access to:
 
 ```text
+tracks2
+taginfo
+```
+
+SongSync does not insert, update or delete any database records.
+
+## Local export configuration
+
+```python
+PUBLIC_EXPORT_DIR = "exports/public"
+PRIVATE_EXPORT_DIR = "exports/private"
+```
+
+The directories are created automatically when SongSync runs.
+
+## Console configuration
+
+```python
+SHOW_EXAMPLES = True
+EXAMPLE_LIMIT = 10
+```
+
+When enabled, SongSync displays a small selection of public catalog entries after an export.
+
+## Running SongSync
+
+Run:
+
+```bat
 py songsync.py
 ```
 
+A successful local export ends with:
+
+```text
+Export completed. No RadioBOSS data was changed.
+```
+
+If automatic SFTP upload is disabled, SongSync displays:
+
+```text
+SFTP upload is disabled.
+```
+
+## Automatic SFTP upload
+
+Enable automatic upload in `config.py`:
+
+```python
+SFTP_ENABLED = True
+```
+
+Basic SFTP settings:
+
+```python
+SFTP_HOST = "your-sftp-server.example"
+SFTP_PORT = 22
+
+SFTP_USERNAME = "CHANGE_ME"
+SFTP_PASSWORD = "CHANGE_ME"
+```
+
+Remote target directories:
+
+```python
+SFTP_REMOTE_PUBLIC_DIR = (
+    "/path/to/songrequest/data/public"
+)
+
+SFTP_REMOTE_PRIVATE_DIR = (
+    "/path/to/songrequest/data/private"
+)
+```
+
+Both remote directories must already exist.
+
+After a successful export, SongSync uploads:
+
+```text
+songs.json
+artists.json
+genres.json
+info.json
+lookup.json
+```
+
+A successful upload ends with:
+
+```text
+SFTP upload completed successfully.
+```
+
+## SSH private-key authentication
+
+Some web hosts may reject automated password authentication even when the same credentials work in graphical SFTP programs.
+
+SongSync therefore supports SSH private-key authentication.
+
+Example:
+
+```python
+SFTP_PRIVATE_KEY_FILE = "sftp_key"
+SFTP_PRIVATE_KEY_PASSPHRASE = ""
+```
+
+Leave the passphrase empty when the private key is not encrypted.
+
+The private key must remain on the SongSync computer.
+
+Never upload it to:
+
+- GitHub
+- The public website
+- The web server
+- A support forum
+- A chat message
+
+For detailed SFTP and SSH-key instructions, see:
+
+[SFTP Setup Guide](docs/SFTP_SETUP.md)
+
+## SFTP server verification
+
+SongSync can trust the SFTP server key during the first successful connection:
+
+```python
+SFTP_TRUST_ON_FIRST_USE = True
+SFTP_KNOWN_HOSTS_FILE = "sftp_known_hosts"
+```
+
+The first connection stores the server identity locally.
+
+Future connections verify that the server presents the same key. If the key changes unexpectedly, SongSync stops the upload.
+
+## Automatic RadioBOSS Scheduler event
+
+SongSync can run automatically from the RadioBOSS Scheduler.
+
+Create:
+
+```text
+run_songsync.bat
+```
+
+Example:
+
+```bat
+@echo off
+cd /d "D:\radioboss-song-sync"
+py songsync.py
+```
+
+RadioBOSS scheduler command:
+
+```text
+run D:\radioboss-song-sync\run_songsync.bat
+```
+
+For example, the event can run once per day after the regular RadioBOSS database backup.
+
+For detailed instructions, see:
+
+[RadioBOSS Automation Guide](docs/RADIOBOSS_AUTOMATION.md)
+
 ## Security
 
-- Never upload `config.py`.
-- Use a MySQL user with `SELECT` permission only.
-- Never place `lookup.json` in a publicly downloadable directory.
-- Do not expose the RadioBOSS MySQL server to the internet.
+The included `.gitignore` prevents private and generated files from being committed.
 
-## Next step
+The following files must remain local:
 
-The website frontend will load `songs.json` in JavaScript. When a listener
-requests a song, the browser sends only the `track_id` to PHP. PHP resolves
-the filename from the protected `lookup.json` and sends the request to
-RadioBOSS.
+```text
+config.py
+sftp_key
+sftp_key.pub
+sftp_known_hosts
+exports/
+```
+
+Before every GitHub commit, verify that these files do not appear in the changes list.
+
+## Recommended `.gitignore`
+
+```gitignore
+# Private configuration
+config.py
+
+# Generated exports
+exports/
+
+# SFTP credentials and server identity
+sftp_key
+sftp_key.pub
+sftp_known_hosts
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Logs
+logs/
+*.log
+
+# Editors
+.vscode/
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+```
+
+## Duplicate handling
+
+SongSync considers tracks duplicates when their normalized artist and title are identical.
+
+The first matching RadioBOSS track is retained in the public catalog. Additional matching tracks are written to:
+
+```text
+exports/private/duplicates.log
+```
+
+Duplicate files are not deleted and the RadioBOSS database is not changed.
+
+## Error behavior
+
+If the MySQL connection fails:
+
+- No new catalog is uploaded
+- Existing website files remain unchanged
+
+If the local export fails:
+
+- SFTP upload does not start
+- Existing website files remain unchanged
+
+If the SFTP upload fails:
+
+- Local export files remain available
+- Existing successfully uploaded website files remain available
+- SongSync exits with an error message
+
+## Typical workflow
+
+```text
+RadioBOSS MySQL library
+        |
+        v
+RadioBOSS SongSync Engine
+        |
+        +-- Public JSON catalog
+        |
+        +-- Private filename lookup
+        |
+        v
+Encrypted SFTP upload
+        |
+        v
+RadioBOSS Song Request System
+```
+
+## Project files
+
+```text
+RadioBOSS-SongSync-Engine/
+|
+|-- docs/
+|   |-- INSTALLATION.md
+|   |-- SFTP_SETUP.md
+|   `-- RADIOBOSS_AUTOMATION.md
+|
+|-- .gitignore
+|-- config.example.py
+|-- LICENSE
+|-- README.md
+|-- requirements.txt
+`-- songsync.py
+```
+
+Private and generated files are not included in the repository.
+
+## Current versions
+
+```text
+SongSync Engine:              1.2.1
+MySQL connector requirement: 9.x
+SFTP library:                AsyncSSH 2.20 or newer
+```
+
+## License
+
+This project is released under the MIT License.
+
+See [LICENSE](LICENSE) for details.
+
+## Feedback and issues
+
+Bug reports, compatibility reports and suggestions are welcome through GitHub Issues.
+
+When reporting an error, never include:
+
+- Database passwords
+- SFTP passwords
+- Private SSH keys
+- Full private configuration files
+- Local music paths

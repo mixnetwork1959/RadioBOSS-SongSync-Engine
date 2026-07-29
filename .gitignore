@@ -1,13 +1,30 @@
+# Private configuration
 config.py
+
+# Generated exports
+exports/
+
+# SFTP credentials and server identity
+sftp_key
+sftp_key.pub
+sftp_known_hosts
+
+# Python cache
 __pycache__/
 *.py[cod]
+
+# Virtual environments
 .venv/
 venv/
-env/
-exports/
+
+# Logs
 logs/
 *.log
+
+# Editors
 .vscode/
 .idea/
+
+# Windows
 Thumbs.db
 Desktop.ini

@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import posixpath
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -24,8 +26,16 @@ except ImportError:
     print("    py -m pip install -r requirements.txt")
     raise SystemExit(1)
 
+try:
+    import asyncssh
+except ImportError:
+    print("ERROR: asyncssh is not installed.")
+    print("Install it with:")
+    print("    py -m pip install -r requirements.txt")
+    raise SystemExit(1)
 
-VERSION = "1.0.0"
+
+VERSION = "1.2.1"
 
 
 def load_config():
@@ -56,6 +66,7 @@ def load_config():
         "PRIVATE_EXPORT_DIR",
         "SHOW_EXAMPLES",
         "EXAMPLE_LIMIT",
+        "SFTP_ENABLED",
     ]
 
     missing = [name for name in required if not hasattr(config, name)]
@@ -230,6 +241,221 @@ def atomic_json_write(path: Path, payload) -> None:
         handle.write("\n")
 
     temp_path.replace(path)
+
+
+def validate_sftp_config() -> None:
+    if not CONFIG.SFTP_ENABLED:
+        return
+
+    required = [
+        "SFTP_HOST",
+        "SFTP_PORT",
+        "SFTP_USERNAME",
+        "SFTP_PASSWORD",
+        "SFTP_PRIVATE_KEY_FILE",
+        "SFTP_PRIVATE_KEY_PASSPHRASE",
+        "SFTP_REMOTE_PUBLIC_DIR",
+        "SFTP_REMOTE_PRIVATE_DIR",
+        "SFTP_TIMEOUT",
+        "SFTP_TRUST_ON_FIRST_USE",
+        "SFTP_KNOWN_HOSTS_FILE",
+    ]
+
+    missing = [name for name in required if not hasattr(CONFIG, name)]
+
+    if missing:
+        raise RuntimeError(
+            "Missing SFTP setting(s): " + ", ".join(missing)
+        )
+
+    text_settings = [
+        "SFTP_HOST",
+        "SFTP_USERNAME",
+        "SFTP_PASSWORD",
+        "SFTP_REMOTE_PUBLIC_DIR",
+        "SFTP_REMOTE_PRIVATE_DIR",
+        "SFTP_KNOWN_HOSTS_FILE",
+    ]
+
+    empty = [
+        name
+        for name in text_settings
+        if not str(getattr(CONFIG, name, "")).strip()
+    ]
+
+    if empty:
+        raise RuntimeError(
+            "Empty SFTP setting(s): " + ", ".join(empty)
+        )
+
+    if int(CONFIG.SFTP_PORT) < 1 or int(CONFIG.SFTP_PORT) > 65535:
+        raise RuntimeError("SFTP_PORT must be between 1 and 65535.")
+
+    if int(CONFIG.SFTP_TIMEOUT) < 1:
+        raise RuntimeError("SFTP_TIMEOUT must be at least 1 second.")
+
+    private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
+
+    if private_key_file and not Path(private_key_file).expanduser().is_file():
+        raise RuntimeError(
+            f"SFTP private key file was not found: {private_key_file}"
+        )
+
+
+def remote_join(directory: str, filename: str) -> str:
+    directory = str(directory).replace("\\", "/").rstrip("/")
+    return posixpath.join(directory, filename)
+
+
+def known_host_name(host: str, port: int) -> str:
+    return host if port == 22 else f"[{host}]:{port}"
+
+
+def save_asyncssh_host_key(
+    connection,
+    host: str,
+    port: int,
+    known_hosts_file: Path,
+) -> None:
+    server_key = connection.get_server_host_key()
+    exported_key = server_key.export_public_key("openssh")
+
+    if isinstance(exported_key, bytes):
+        exported_key = exported_key.decode("ascii")
+
+    known_hosts_file.parent.mkdir(parents=True, exist_ok=True)
+    known_hosts_file.write_text(
+        f"{known_host_name(host, port)} {exported_key.strip()}\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+async def replace_remote_file(
+    sftp,
+    local_path: Path,
+    remote_path: str,
+) -> None:
+    temporary_path = remote_path + ".tmp"
+
+    try:
+        await sftp.remove(temporary_path)
+    except (OSError, asyncssh.SFTPError):
+        pass
+
+    await sftp.put(str(local_path), temporary_path)
+
+    try:
+        await sftp.posix_rename(temporary_path, remote_path)
+        return
+    except (OSError, asyncssh.SFTPError):
+        pass
+
+    try:
+        await sftp.remove(remote_path)
+    except (OSError, asyncssh.SFTPError):
+        pass
+
+    await sftp.rename(temporary_path, remote_path)
+
+
+async def upload_exports_async() -> None:
+    validate_sftp_config()
+
+    host = str(CONFIG.SFTP_HOST).strip()
+    port = int(CONFIG.SFTP_PORT)
+    username = str(CONFIG.SFTP_USERNAME)
+    password = str(CONFIG.SFTP_PASSWORD)
+    timeout = int(CONFIG.SFTP_TIMEOUT)
+    known_hosts_file = Path(CONFIG.SFTP_KNOWN_HOSTS_FILE).expanduser()
+    private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
+    private_key_passphrase = str(CONFIG.SFTP_PRIVATE_KEY_PASSPHRASE)
+
+    client_keys = (
+        [str(Path(private_key_file).expanduser())]
+        if private_key_file
+        else []
+    )
+
+    if known_hosts_file.is_file():
+        known_hosts = str(known_hosts_file)
+        trust_first_connection = False
+    elif CONFIG.SFTP_TRUST_ON_FIRST_USE:
+        known_hosts = None
+        trust_first_connection = True
+    else:
+        raise RuntimeError(
+            "SFTP host key is unknown and trust-on-first-use is disabled."
+        )
+
+    print()
+    print("Connecting to SFTP server...")
+
+    async with asyncssh.connect(
+        host,
+        port=port,
+        username=username,
+        password=password,
+        known_hosts=known_hosts,
+        client_keys=client_keys,
+        passphrase=private_key_passphrase or None,
+        agent_path=None,
+        login_timeout=timeout,
+    ) as connection:
+        if trust_first_connection:
+            save_asyncssh_host_key(
+                connection,
+                host,
+                port,
+                known_hosts_file,
+            )
+            print("SFTP server key saved for future verification.")
+
+        async with connection.start_sftp_client() as sftp:
+            public_dir = str(CONFIG.SFTP_REMOTE_PUBLIC_DIR)
+            private_dir = str(CONFIG.SFTP_REMOTE_PRIVATE_DIR)
+
+            if not await sftp.isdir(public_dir):
+                raise RuntimeError(
+                    f"Remote public directory does not exist: {public_dir}"
+                )
+
+            if not await sftp.isdir(private_dir):
+                raise RuntimeError(
+                    f"Remote private directory does not exist: {private_dir}"
+                )
+
+            uploads = [
+                (SONGS_FILE, remote_join(public_dir, SONGS_FILE.name)),
+                (ARTISTS_FILE, remote_join(public_dir, ARTISTS_FILE.name)),
+                (GENRES_FILE, remote_join(public_dir, GENRES_FILE.name)),
+                (INFO_FILE, remote_join(public_dir, INFO_FILE.name)),
+                (LOOKUP_FILE, remote_join(private_dir, LOOKUP_FILE.name)),
+            ]
+
+            for local_path, remote_path in uploads:
+                if not local_path.is_file():
+                    raise RuntimeError(
+                        f"Local export file is missing: {local_path}"
+                    )
+
+                print(f"Uploading {local_path.name}...")
+                await replace_remote_file(
+                    sftp,
+                    local_path,
+                    remote_path,
+                )
+
+    print("SFTP upload completed successfully.")
+
+
+def upload_exports_sftp() -> None:
+    if not CONFIG.SFTP_ENABLED:
+        print()
+        print("SFTP upload is disabled.")
+        return
+
+    asyncio.run(upload_exports_async())
 
 
 def catalog_hash(unique_songs: list[Song]) -> str:
@@ -425,6 +651,8 @@ def main() -> int:
             unique_songs,
             duplicate_groups,
         )
+
+        upload_exports_sftp()
 
         return 0
 
