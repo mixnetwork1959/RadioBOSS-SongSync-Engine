@@ -1,3 +1,6 @@
+# Release packages
+*.zip
+
 # Private configuration
 config.py
 
