@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.3.0
+# Version 1.4.0
 # Example configuration
 # ==========================================================
 #
@@ -10,8 +10,41 @@
 
 
 # ----------------------------------------------------------
-# RadioBOSS MySQL database
+# Database type
 # ----------------------------------------------------------
+#
+# Choose:
+# "sqlite" = standard RadioBOSS tracks.db database
+# "mysql"  = RadioBOSS database hosted on MySQL/MariaDB
+#
+
+DB_TYPE = "sqlite"
+
+
+# ----------------------------------------------------------
+# RadioBOSS SQLite database
+# ----------------------------------------------------------
+#
+# SQLITE_MODE:
+# "dedicated" = database inside a RadioBOSS profile folder
+# "shared"    = shared database in the djsoft.net folder
+#
+# SQLITE_DATABASE:
+# "auto" lets SongSync find tracks.db automatically.
+# Enter a complete path only if more than one dedicated
+# RadioBOSS database is installed for the Windows user.
+#
+
+SQLITE_MODE = "dedicated"
+SQLITE_DATABASE = "auto"
+
+
+# ----------------------------------------------------------
+# RadioBOSS MySQL/MariaDB database
+# ----------------------------------------------------------
+#
+# These settings are used only when DB_TYPE = "mysql".
+#
 
 DB_HOST = "127.0.0.1"
 DB_PORT = 3306
@@ -66,6 +99,11 @@ SFTP_PORT = 22
 # SFTP login
 SFTP_USERNAME = "CHANGE_ME"
 SFTP_PASSWORD = "CHANGE_ME"
+
+# Optional private-key login. Leave empty when using a
+# password.
+SFTP_PRIVATE_KEY_FILE = ""
+SFTP_PRIVATE_KEY_PASSPHRASE = ""
 
 
 # ----------------------------------------------------------

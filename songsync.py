@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.3.0
+# Version 1.4.2
 # songsync.py
 # ==========================================================
 
@@ -9,8 +9,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import posixpath
 import runpy
+import shutil
+import sqlite3
+import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
@@ -23,10 +27,10 @@ try:
     import mysql.connector
     from mysql.connector import Error as MySQLError
 except ImportError:
-    print("ERROR: mysql-connector-python is not installed.")
-    print("Install it with:")
-    print("    py -m pip install -r requirements.txt")
-    raise SystemExit(1)
+    mysql = None
+
+    class MySQLError(Exception):
+        pass
 
 try:
     import asyncssh
@@ -37,7 +41,7 @@ except ImportError:
     raise SystemExit(1)
 
 
-VERSION = "1.3.0"
+VERSION = "1.4.2"
 
 
 def application_dir() -> Path:
@@ -63,8 +67,24 @@ def load_config():
     config_path = APP_DIR / "config.py"
 
     if not config_path.is_file():
-        print(f"ERROR: config.py was not found in: {APP_DIR}")
-        print("Copy config.example.py to config.py and enter your settings.")
+        example_path = APP_DIR / "config.example.py"
+
+        if not example_path.is_file():
+            print(f"ERROR: config.py was not found in: {APP_DIR}")
+            print("ERROR: config.example.py was not found either.")
+            print("Place config.example.py in the same folder as SongSync.exe.")
+            raise SystemExit(1)
+
+        try:
+            shutil.copyfile(example_path, config_path)
+        except OSError as exc:
+            print("ERROR: config.py could not be created:")
+            print(f"{type(exc).__name__}: {exc}")
+            raise SystemExit(1) from exc
+
+        print("config.py was created successfully.")
+        print(f"Location: {config_path}")
+        print("Enter your settings in config.py, then start SongSync again.")
         raise SystemExit(1)
 
     try:
@@ -75,12 +95,6 @@ def load_config():
         raise SystemExit(1) from exc
 
     required = [
-        "DB_HOST",
-        "DB_PORT",
-        "DB_NAME",
-        "DB_USER",
-        "DB_PASSWORD",
-        "DB_CHARSET",
         "PUBLIC_EXPORT_DIR",
         "PRIVATE_EXPORT_DIR",
         "SHOW_EXAMPLES",
@@ -102,7 +116,48 @@ def load_config():
         if not name.startswith("__")
     }
 
-    return SimpleNamespace(**public_settings)
+    settings = SimpleNamespace(**public_settings)
+    settings.DB_TYPE = str(
+        getattr(settings, "DB_TYPE", "mysql")
+    ).strip().lower()
+
+    if settings.DB_TYPE == "mysql":
+        mysql_required = [
+            "DB_HOST",
+            "DB_PORT",
+            "DB_NAME",
+            "DB_USER",
+            "DB_PASSWORD",
+            "DB_CHARSET",
+        ]
+        mysql_missing = [
+            name for name in mysql_required
+            if not hasattr(settings, name)
+        ]
+
+        if mysql_missing:
+            print("ERROR: Missing MySQL setting(s) in config.py:")
+            for name in mysql_missing:
+                print(f"  - {name}")
+            raise SystemExit(1)
+
+    elif settings.DB_TYPE == "sqlite":
+        settings.SQLITE_MODE = str(
+            getattr(settings, "SQLITE_MODE", "dedicated")
+        ).strip().lower()
+        settings.SQLITE_DATABASE = str(
+            getattr(settings, "SQLITE_DATABASE", "auto")
+        ).strip()
+
+        if settings.SQLITE_MODE not in {"shared", "dedicated"}:
+            print("ERROR: SQLITE_MODE must be 'shared' or 'dedicated'.")
+            raise SystemExit(1)
+
+    else:
+        print("ERROR: DB_TYPE must be 'mysql' or 'sqlite'.")
+        raise SystemExit(1)
+
+    return settings
 
 
 CONFIG = load_config()
@@ -141,7 +196,84 @@ def normalize_text(value: str) -> str:
     return " ".join((value or "").casefold().split())
 
 
+def find_sqlite_database() -> Path:
+    configured = CONFIG.SQLITE_DATABASE
+
+    if configured.casefold() != "auto":
+        database_path = resolve_local_path(configured)
+
+        if not database_path.is_file():
+            raise FileNotFoundError(
+                f"SQLite database was not found: {database_path}"
+            )
+
+        return database_path
+
+    appdata = os.environ.get("APPDATA", "").strip()
+
+    if not appdata:
+        raise RuntimeError(
+            "Windows APPDATA could not be determined."
+        )
+
+    radio_root = Path(appdata) / "djsoft.net"
+
+    if CONFIG.SQLITE_MODE == "shared":
+        database_path = radio_root / "tracks.db"
+
+        if not database_path.is_file():
+            raise FileNotFoundError(
+                f"Shared RadioBOSS database was not found: {database_path}"
+            )
+
+        return database_path
+
+    matches = sorted(
+        path
+        for path in radio_root.glob("RadioBOSS_*/tracks.db")
+        if path.is_file()
+    )
+
+    if not matches:
+        raise FileNotFoundError(
+            "No dedicated RadioBOSS tracks.db was found below: "
+            f"{radio_root}"
+        )
+
+    if len(matches) > 1:
+        options = "\n".join(f"  - {path}" for path in matches)
+        raise RuntimeError(
+            "Multiple dedicated RadioBOSS databases were found.\n"
+            "Enter the required path as SQLITE_DATABASE in config.py:\n"
+            f"{options}"
+        )
+
+    return matches[0]
+
+
+def database_label() -> str:
+    if CONFIG.DB_TYPE == "sqlite":
+        return str(find_sqlite_database())
+
+    return str(CONFIG.DB_NAME)
+
+
 def connect_database():
+    if CONFIG.DB_TYPE == "sqlite":
+        database_path = find_sqlite_database()
+        connection = sqlite3.connect(
+            f"file:{database_path.as_posix()}?mode=ro",
+            uri=True,
+            timeout=10,
+        )
+        connection.row_factory = sqlite3.Row
+        return connection
+
+    if mysql is None:
+        raise RuntimeError(
+            "mysql-connector-python is required for DB_TYPE = 'mysql'."
+        )
+
     return mysql.connector.connect(
         host=CONFIG.DB_HOST,
         port=CONFIG.DB_PORT,
@@ -160,15 +292,26 @@ def verify_required_tables(connection) -> None:
     required = {"tracks2", "taginfo"}
 
     cursor = connection.cursor()
-    cursor.execute(
-        """
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = %s
-          AND table_name IN ('tracks2', 'taginfo')
-        """,
-        (CONFIG.DB_NAME,),
-    )
+
+    if CONFIG.DB_TYPE == "sqlite":
+        cursor.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type IN ('table', 'view')
+              AND name IN ('tracks2', 'taginfo')
+            """
+        )
+    else:
+        cursor.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = %s
+              AND table_name IN ('tracks2', 'taginfo')
+            """,
+            (CONFIG.DB_NAME,),
+        )
 
     found = {row[0] for row in cursor.fetchall()}
     cursor.close()
@@ -197,7 +340,10 @@ def load_songs(connection) -> list[Song]:
         ORDER BY t.track_id
     """
 
-    cursor = connection.cursor(dictionary=True)
+    if CONFIG.DB_TYPE == "sqlite":
+        cursor = connection.cursor()
+    else:
+        cursor = connection.cursor(dictionary=True)
     cursor.execute(sql)
 
     songs: list[Song] = []
@@ -397,18 +543,27 @@ async def upload_exports_async() -> None:
 
     host = str(CONFIG.SFTP_HOST).strip()
     port = int(CONFIG.SFTP_PORT)
-    username = str(CONFIG.SFTP_USERNAME)
+    username = str(CONFIG.SFTP_USERNAME).strip()
     password = str(CONFIG.SFTP_PASSWORD).strip()
     timeout = int(CONFIG.SFTP_TIMEOUT)
     known_hosts_file = resolve_local_path(CONFIG.SFTP_KNOWN_HOSTS_FILE)
     private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
     private_key_passphrase = str(CONFIG.SFTP_PRIVATE_KEY_PASSPHRASE)
 
-    client_keys = (
-        [str(resolve_local_path(private_key_file))]
-        if private_key_file
-        else []
-    )
+    if private_key_file:
+        private_key_path = resolve_local_path(private_key_file)
+        client_keys = [
+            asyncssh.read_private_key(
+                str(private_key_path),
+                passphrase=private_key_passphrase or None,
+            )
+        ]
+        password = None
+        preferred_auth = "publickey"
+    else:
+        client_keys = []
+        password = password or None
+        preferred_auth = "password,keyboard-interactive"
 
     if known_hosts_file.is_file():
         known_hosts = str(known_hosts_file)
@@ -428,10 +583,11 @@ async def upload_exports_async() -> None:
         host,
         port=port,
         username=username,
-        password=password or None,
+        password=password,
         known_hosts=known_hosts,
         client_keys=client_keys,
         passphrase=private_key_passphrase or None,
+        preferred_auth=preferred_auth,
         agent_path=None,
         login_timeout=timeout,
     ) as connection:
@@ -482,10 +638,131 @@ async def upload_exports_async() -> None:
     print("SFTP upload completed successfully.")
 
 
+def sftp_batch_quote(value: str | Path) -> str:
+    text = str(value).replace('"', '""')
+    return f'"{text}"'
+
+
+def upload_exports_openssh() -> None:
+    validate_sftp_config()
+
+    sftp_executable = shutil.which("sftp")
+
+    if not sftp_executable:
+        raise RuntimeError(
+            "Windows OpenSSH SFTP was not found. Install the Windows "
+            "OpenSSH Client optional feature or use password-based SFTP."
+        )
+
+    host = str(CONFIG.SFTP_HOST).strip()
+    port = int(CONFIG.SFTP_PORT)
+    username = str(CONFIG.SFTP_USERNAME).strip()
+    private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
+    private_key_path = resolve_local_path(private_key_file)
+    known_hosts_file = resolve_local_path(CONFIG.SFTP_KNOWN_HOSTS_FILE)
+
+    if str(CONFIG.SFTP_PRIVATE_KEY_PASSPHRASE):
+        raise RuntimeError(
+            "The Windows OpenSSH batch upload cannot use a key passphrase "
+            "directly. Load the key into ssh-agent or use an unencrypted "
+            "dedicated SongSync key."
+        )
+
+    strict_host_checking = (
+        "accept-new"
+        if CONFIG.SFTP_TRUST_ON_FIRST_USE
+        else "yes"
+    )
+
+    public_dir = str(CONFIG.SFTP_REMOTE_PUBLIC_DIR)
+    private_dir = str(CONFIG.SFTP_REMOTE_PRIVATE_DIR)
+
+    uploads = [
+        (SONGS_FILE, remote_join(public_dir, SONGS_FILE.name)),
+        (ARTISTS_FILE, remote_join(public_dir, ARTISTS_FILE.name)),
+        (GENRES_FILE, remote_join(public_dir, GENRES_FILE.name)),
+        (INFO_FILE, remote_join(public_dir, INFO_FILE.name)),
+        (LOOKUP_FILE, remote_join(private_dir, LOOKUP_FILE.name)),
+    ]
+
+    batch_lines = [
+        f"ls {sftp_batch_quote(public_dir)}",
+        f"ls {sftp_batch_quote(private_dir)}",
+    ]
+
+    for local_path, remote_path in uploads:
+        if not local_path.is_file():
+            raise RuntimeError(
+                f"Local export file is missing: {local_path}"
+            )
+
+        temporary_path = remote_path + ".tmp"
+        batch_lines.extend(
+            [
+                (
+                    f"put {sftp_batch_quote(local_path.resolve())} "
+                    f"{sftp_batch_quote(temporary_path)}"
+                ),
+                f"-rm {sftp_batch_quote(remote_path)}",
+                (
+                    f"rename {sftp_batch_quote(temporary_path)} "
+                    f"{sftp_batch_quote(remote_path)}"
+                ),
+            ]
+        )
+
+    batch_lines.append("quit")
+    batch_input = "\n".join(batch_lines) + "\n"
+
+    command = [
+        sftp_executable,
+        "-q",
+        "-b",
+        "-",
+        "-P",
+        str(port),
+        "-i",
+        str(private_key_path),
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        f"UserKnownHostsFile={known_hosts_file}",
+        "-o",
+        f"StrictHostKeyChecking={strict_host_checking}",
+        f"{username}@{host}",
+    ]
+
+    print()
+    print("Connecting to SFTP server with Windows OpenSSH...")
+
+    result = subprocess.run(
+        command,
+        input=batch_input,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        details = (result.stderr or result.stdout).strip()
+        raise RuntimeError(
+            "Windows OpenSSH SFTP upload failed"
+            + (f":\n{details}" if details else ".")
+        )
+
+    print("SFTP upload completed successfully.")
+
+
 def upload_exports_sftp() -> None:
     if not CONFIG.SFTP_ENABLED:
         print()
         print("SFTP upload is disabled.")
+        return
+
+    private_key_file = str(CONFIG.SFTP_PRIVATE_KEY_FILE).strip()
+
+    if os.name == "nt" and private_key_file:
+        upload_exports_openssh()
         return
 
     asyncio.run(upload_exports_async())
@@ -542,7 +819,7 @@ def write_exports(
         "generator": "RadioBOSS SongSync Engine",
         "version": VERSION,
         "generated_at": generated_at,
-        "database": CONFIG.DB_NAME,
+        "database": database_label(),
         "database_records": len(all_songs),
         "usable_records": len(usable_songs),
         "unique_songs": len(unique_songs),
@@ -611,7 +888,7 @@ def print_report(
     print("=" * 66)
     print(f"RadioBOSS SongSync Engine v{VERSION}")
     print("=" * 66)
-    print(f"Database:                     {CONFIG.DB_NAME}")
+    print(f"Database:                     {database_label()}")
     print(f"Database records:             {len(all_songs):>10}")
     print(f"Usable song records:          {len(usable_songs):>10}")
     print(f"Unique artist/title:          {len(unique_songs):>10}")
@@ -648,14 +925,21 @@ def print_report(
 
 def main() -> int:
     print(f"RadioBOSS SongSync Engine v{VERSION}")
-    print("Connecting to RadioBOSS MySQL database...")
+
+    if CONFIG.DB_TYPE == "sqlite":
+        print("Opening RadioBOSS SQLite database...")
+    else:
+        print("Connecting to RadioBOSS MySQL database...")
 
     connection = None
 
     try:
         connection = connect_database()
 
-        if not connection.is_connected():
+        if (
+            CONFIG.DB_TYPE == "mysql"
+            and not connection.is_connected()
+        ):
             raise RuntimeError("MySQL connection was not established.")
 
         verify_required_tables(connection)
@@ -702,8 +986,11 @@ def main() -> int:
         return 1
 
     finally:
-        if connection is not None and connection.is_connected():
-            connection.close()
+        if connection is not None:
+            if CONFIG.DB_TYPE == "sqlite":
+                connection.close()
+            elif connection.is_connected():
+                connection.close()
 
 
 if __name__ == "__main__":

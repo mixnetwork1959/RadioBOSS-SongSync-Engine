@@ -1,8 +1,8 @@
 # RadioBOSS SongSync Engine
 
-**Version 1.3.0**
+**Version 1.4.2**
 
-RadioBOSS SongSync Engine reads the RadioBOSS MySQL music library and generates secure JSON catalog files for the [RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
+RadioBOSS SongSync Engine reads the RadioBOSS music library from its standard SQLite database or from MySQL/MariaDB and generates secure JSON catalog files for the [RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
 
 It can automatically upload the generated catalog to a web server using SFTP.
 
@@ -14,30 +14,33 @@ It can automatically upload the generated catalog to a web server using SFTP.
 
 Windows users can run SongSync without installing Python or additional packages.
 
-1. Download `RadioBOSS-SongSync-Windows-v1.3.0.zip` from the latest GitHub release.
+1. Download `SongSync.zip` from the latest GitHub release.
 2. Extract the ZIP file to a permanent directory, for example:
 
    ```text
    C:\RadioBOSS-SongSync
    ```
 
-3. Copy `config.example.py` to:
+3. Start:
 
    ```text
-   config.py
+   SongSync.exe
    ```
 
-4. Open `config.py` and enter the RadioBOSS MySQL and SFTP settings.
+   On the first start, SongSync automatically creates `config.py` from
+   `config.example.py` and then exits.
+
+4. Open `config.py` and select SQLite or MySQL/MariaDB. Enter the optional SFTP settings when automatic upload is required.
 5. If SSH key authentication is used, place the private key in the same directory and configure:
 
    ```python
    SFTP_PRIVATE_KEY_FILE = "sftp_key"
    ```
 
-6. Start SongSync using `run_songsync.bat` or directly:
+6. Start SongSync again:
 
    ```text
-   RadioBOSS-SongSync.exe
+   SongSync.exe
    ```
 
 The generated catalog files are written to the local `exports` directory. If SFTP is enabled, the files are uploaded automatically after a successful export.
@@ -70,7 +73,10 @@ Both projects are required for the complete web-based request system:
 
 ## Features
 
-- Reads the RadioBOSS MySQL music library
+- Reads the standard RadioBOSS SQLite music library
+- Automatically finds shared or dedicated RadioBOSS SQLite databases
+- Supports MySQL/MariaDB as an alternative database
+- Opens SQLite databases in read-only mode
 - Uses the `tracks2` and `taginfo` tables
 - Excludes invalid or disabled tracks
 - Excludes tracks without artist, title or filename
@@ -84,6 +90,7 @@ Both projects are required for the complete web-based request system:
 - Supports automatic SFTP uploads
 - Supports SFTP password authentication
 - Supports SSH private-key authentication
+- Uses Windows OpenSSH automatically for private-key uploads on Windows
 - Verifies the SFTP server identity
 - Keeps database and SFTP credentials private
 - Can be started automatically from the RadioBOSS Scheduler
@@ -148,8 +155,8 @@ Example:
 ### Windows EXE
 
 - Windows 10 or Windows 11
-- RadioBOSS using a MySQL music library
-- Read access to the RadioBOSS MySQL database
+- RadioBOSS using SQLite or MySQL/MariaDB
+- Read access to the selected RadioBOSS database
 - Internet access for optional SFTP uploads
 
 ### Python source version
@@ -159,8 +166,13 @@ Example:
 Required Python packages:
 
 ```text
-mysql-connector-python>=9.0,<10.0
 asyncssh>=2.20
+```
+
+MySQL/MariaDB additionally requires:
+
+```text
+mysql-connector-python>=9.0,<10.0
 ```
 
 ## Installation
@@ -173,19 +185,9 @@ Open a command prompt in the project directory and install the required packages
 py -m pip install -r requirements.txt
 ```
 
-Copy:
-
-```text
-config.example.py
-```
-
-to:
-
-```text
-config.py
-```
-
-Enter the real MySQL and optional SFTP settings in `config.py`.
+On the first start, SongSync copies `config.example.py` to `config.py`.
+Enter the database selection and optional SFTP settings in `config.py`, then
+start SongSync again.
 
 > [!IMPORTANT]
 > Never upload `config.py` to GitHub. It contains private credentials.
@@ -194,7 +196,45 @@ For complete setup instructions, see:
 
 [Installation Guide](docs/INSTALLATION.md)
 
-## MySQL configuration
+## SQLite configuration
+
+SQLite is the default and recommended option for a standard RadioBOSS
+installation:
+
+```python
+DB_TYPE = "sqlite"
+SQLITE_MODE = "dedicated"
+SQLITE_DATABASE = "auto"
+```
+
+Choose `dedicated` when RadioBOSS stores `tracks.db` inside its profile folder:
+
+```text
+%APPDATA%\djsoft.net\RadioBOSS_*\tracks.db
+```
+
+Choose `shared` when RadioBOSS uses the common database:
+
+```python
+SQLITE_MODE = "shared"
+```
+
+```text
+%APPDATA%\djsoft.net\tracks.db
+```
+
+With `SQLITE_DATABASE = "auto"`, the Windows username and RadioBOSS profile
+number do not need to be entered. If multiple dedicated databases are found,
+SongSync lists them and asks for the required full path in
+`SQLITE_DATABASE`.
+
+## MySQL/MariaDB configuration
+
+Set:
+
+```python
+DB_TYPE = "mysql"
+```
 
 Example:
 
@@ -207,7 +247,7 @@ DB_PASSWORD = "CHANGE_ME"
 DB_CHARSET = "utf8mb4"
 ```
 
-A dedicated read-only MySQL user is strongly recommended.
+A dedicated read-only MySQL/MariaDB user is strongly recommended.
 
 The MySQL user requires read access to:
 
@@ -240,8 +280,8 @@ When enabled, SongSync displays a small selection of public catalog entries afte
 
 Windows EXE:
 
-```bat
-run_songsync.bat
+```text
+SongSync.exe
 ```
 
 Python source version:
@@ -368,8 +408,8 @@ Example:
 @echo off
 cd /d "%~dp0"
 
-if exist "RadioBOSS-SongSync.exe" (
-    RadioBOSS-SongSync.exe
+if exist "SongSync.exe" (
+    SongSync.exe
 ) else (
     py songsync.py
 )
@@ -458,7 +498,7 @@ Duplicate files are not deleted and the RadioBOSS database is not changed.
 
 ## Error behavior
 
-If the MySQL connection fails:
+If the selected database cannot be opened:
 
 - No new catalog is uploaded
 - Existing website files remain unchanged
@@ -477,7 +517,7 @@ If the SFTP upload fails:
 ## Typical workflow
 
 ```text
-RadioBOSS MySQL library
+RadioBOSS SQLite or MySQL/MariaDB library
         |
         v
 RadioBOSS SongSync Engine
@@ -517,9 +557,10 @@ Private and generated files are not included in the repository.
 ## Current versions
 
 ```text
-SongSync Engine:              1.3.0
-MySQL connector requirement: 9.x
-SFTP library:                AsyncSSH 2.20 or newer
+SongSync Engine:              1.4.2
+SQLite support:               Built into Python
+MySQL connector (optional):   9.x
+SFTP library:                 AsyncSSH 2.20 or newer
 ```
 
 ## License
