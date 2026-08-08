@@ -1,6 +1,6 @@
 # RadioBOSS SongSync Engine
 
-**Version 1.6.0**
+**Version 1.7.0**
 
 RadioBOSS SongSync Engine reads the RadioBOSS music library from its standard SQLite database or from MySQL/MariaDB and generates secure JSON catalog files for the [RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
 
@@ -13,7 +13,7 @@ It can automatically upload the generated catalog to a web server using SFTP.
 
 ## Setup Wizard
 
-Version 1.6.0 includes a separate Windows setup application:
+Version 1.7.0 includes a separate Windows setup application:
 
 ```text
 RadioBOSS-SongSync-Setup.exe
@@ -24,7 +24,7 @@ The setup application is built with no console window. It configures the databas
 `RadioBOSS-SongSync.exe` remains the normal console synchronization executable so it can still be used reliably from RadioBOSS events, Task Scheduler and log files.
 
 
-## Windows executables in v1.6.0
+## Windows executables in v1.7.0
 
 The Windows build creates three executables:
 
@@ -64,7 +64,7 @@ It performs the same synchronization but leaves the console visible so error out
 
 Windows users can run SongSync without installing Python or additional packages.
 
-1. Download `RadioBOSS-SongSync-v1.6.0.zip` from the latest GitHub release.
+1. Download `RadioBOSS-SongSync-v1.7.0.zip` from the latest GitHub release.
 2. Extract the ZIP file to a permanent directory, for example:
 
    ```text
@@ -137,6 +137,9 @@ Both projects are required for the complete web-based request system:
 - Creates catalog information and statistics
 - Creates a private RadioBOSS filename lookup
 - Creates a duplicate report
+- Reads a selected local RadioBOSS `.sdl` scheduler file when enabled
+- Detects music blocks without relying on event names or language
+- Creates a private, path-safe scheduler-event export for rotation analytics
 - Writes JSON files atomically
 - Supports automatic SFTP uploads
 - Supports SFTP password authentication
@@ -193,6 +196,7 @@ The following files contain private information:
 ```text
 exports/private/lookup.json
 exports/private/duplicates.log
+exports/private/scheduler-events.json
 ```
 
 `lookup.json` connects a public track ID to the real RadioBOSS filename.
@@ -209,6 +213,21 @@ Example:
 
 > [!WARNING]
 > `lookup.json` contains local music paths and must never be publicly downloadable.
+
+`scheduler-events.json` is optional. It contains only sanitized playlist-event
+metadata: the event name, schedule, action type and a path-safe preset or
+playlist label. Complete local Windows paths are never written to this file.
+
+Enable it in the Setup Wizard or in `config.py`:
+
+```python
+SCHEDULER_EXPORT_ENABLED = True
+SCHEDULER_SDL_FILE = r"C:\path\to\RadioBOSS\Admin.sdl"
+```
+
+SongSync recognizes `generate`, `getrandomplaylist`, loaded M3U/M3U8/PLS files
+and direct playlist-file events. It ignores non-music scheduler actions and
+does not depend on names such as Morning, Night or any particular language.
 
 ## Requirements
 
@@ -403,6 +422,10 @@ genres.json
 info.json
 lookup.json
 ```
+
+When scheduler export is enabled, `scheduler-events.json` is also uploaded to
+`SFTP_REMOTE_PRIVATE_DIR`. Radio Music Analytics can read it there without any
+access to the RadioBOSS computer's filesystem.
 
 A successful upload ends with:
 
@@ -617,7 +640,7 @@ Private and generated files are not included in the repository.
 ## Current versions
 
 ```text
-SongSync Engine:              1.6.0
+SongSync Engine:              1.7.0
 SQLite support:               Built into Python
 MySQL connector (optional):   9.x
 SFTP library:                 AsyncSSH 2.20 or newer

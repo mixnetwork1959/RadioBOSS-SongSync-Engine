@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.6.0
+# Version 1.7.0
 # Example configuration
 # ==========================================================
 #
@@ -62,11 +62,25 @@ DB_CHARSET = "utf8mb4"
 # songs.json, artists.json, genres.json and info.json
 #
 # Private files:
-# lookup.json and duplicates.log
+# lookup.json, duplicates.log and optional scheduler-events.json
 #
 
 PUBLIC_EXPORT_DIR = "exports/public"
 PRIVATE_EXPORT_DIR = "exports/private"
+
+
+# ----------------------------------------------------------
+# Private scheduler-event export for rotation analytics
+# ----------------------------------------------------------
+#
+# When enabled, SongSync reads the selected RadioBOSS Admin.sdl
+# and creates a path-safe scheduler-events.json. The file contains
+# only playlist-event metadata and is uploaded to the private SFTP
+# directory. Complete Windows paths are never exported.
+#
+
+SCHEDULER_EXPORT_ENABLED = False
+SCHEDULER_SDL_FILE = ""
 
 
 # ----------------------------------------------------------
@@ -121,6 +135,7 @@ SFTP_PRIVATE_KEY_PASSPHRASE = ""
 #
 # Private target receives:
 # - lookup.json
+# - scheduler-events.json (when scheduler export is enabled)
 #
 
 SFTP_REMOTE_PUBLIC_DIR = (

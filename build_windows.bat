@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ==========================================================
-echo RadioBOSS SongSync Engine v1.6.0 - Final Build
+echo RadioBOSS SongSync Engine v1.7.0 - Final Build
 echo ==========================================================
 echo.
 
@@ -36,6 +36,7 @@ py -m PyInstaller ^
   --collect-submodules mysql.connector.aio ^
   --collect-all asyncssh ^
   --hidden-import setup_wizard ^
+  --hidden-import scheduler_export ^
   --hidden-import mysql.connector.plugins.mysql_native_password ^
   --hidden-import mysql.connector.plugins.caching_sha2_password ^
   --hidden-import mysql.connector.plugins.sha256_password ^
@@ -72,6 +73,7 @@ py -m PyInstaller ^
   --collect-submodules mysql.connector.aio ^
   --collect-all asyncssh ^
   --hidden-import setup_wizard ^
+  --hidden-import scheduler_export ^
   --hidden-import mysql.connector.plugins.mysql_native_password ^
   --hidden-import mysql.connector.plugins.caching_sha2_password ^
   --hidden-import mysql.connector.plugins.sha256_password ^

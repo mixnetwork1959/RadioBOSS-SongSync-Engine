@@ -44,9 +44,14 @@ The private directory receives:
 
 ```text
 lookup.json
+scheduler-events.json (optional)
 ```
 
 The private directory must be protected against browser access.
+
+`scheduler-events.json` is uploaded only when the private scheduler export is
+enabled. It is intended for Radio Music Analytics and contains no complete
+local Windows paths.
 
 ## 1. Find the SFTP connection details
 
@@ -199,6 +204,9 @@ Uploading info.json...
 Uploading lookup.json...
 SFTP upload completed successfully.
 ```
+
+When scheduler export is enabled, an additional
+`Uploading scheduler-events.json...` line is shown.
 
 ## SSH private-key authentication
 

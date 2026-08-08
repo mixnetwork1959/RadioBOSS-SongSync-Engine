@@ -39,7 +39,7 @@ https://github.com/mixnetwork1959/RadioBOSS-SongSync-Engine/releases
 
 Choose one of these downloads:
 
-- `RadioBOSS-SongSync-v1.5.0.zip` for the recommended
+- `RadioBOSS-SongSync-v1.7.0.zip` for the recommended
   Windows EXE
 - Source code for users who want to run SongSync with Python
 
@@ -72,6 +72,25 @@ required.
 Continue with:
 
 [Create the private configuration](#4-create-the-private-configuration)
+
+## Optional private scheduler export
+
+Radio Music Analytics cannot access the RadioBOSS computer directly. SongSync
+can bridge that gap by reading the local scheduler file and uploading a
+sanitized private JSON file.
+
+In the Setup Wizard, enable “Export playlist events for Radio Music
+Analytics”, then select the active RadioBOSS `.sdl` file. With manual
+configuration use:
+
+```python
+SCHEDULER_EXPORT_ENABLED = True
+SCHEDULER_SDL_FILE = r"C:\path\to\RadioBOSS\Admin.sdl"
+```
+
+The resulting `exports/private/scheduler-events.json` contains playlist-event
+metadata but no complete Windows paths. When SFTP is enabled, SongSync uploads
+it to the configured private remote directory.
 
 ## 3. Python source installation
 
@@ -295,7 +314,7 @@ py songsync.py
 A normal start looks similar to:
 
 ```text
-RadioBOSS SongSync Engine v1.5.0
+RadioBOSS SongSync Engine v1.7.0
 Database: <selected SQLite or MySQL/MariaDB database>
 Connecting to RadioBOSS database...
 Connection successful.

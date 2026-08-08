@@ -12,7 +12,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 
 def _q(value: str) -> str:
@@ -178,6 +178,8 @@ def build_config(v: dict) -> str:
         f"DB_CHARSET = {_q(v['db_charset'] or 'utf8mb4')}", "",
         f"PUBLIC_EXPORT_DIR = {_q(v['public_export_dir'])}",
         f"PRIVATE_EXPORT_DIR = {_q(v['private_export_dir'])}", "",
+        f"SCHEDULER_EXPORT_ENABLED = {_bool(v['scheduler_export_enabled'])}",
+        f"SCHEDULER_SDL_FILE = {_q(v['scheduler_sdl_file'])}", "",
         f"SHOW_EXAMPLES = {_bool(v['show_examples'])}",
         f"EXAMPLE_LIMIT = {_int(v['example_limit'],10,0,1000)}", "",
         f"SFTP_ENABLED = {_bool(v['sftp_enabled'])}",
@@ -198,7 +200,7 @@ def build_config(v: dict) -> str:
 class SetupWizard(tk.Tk):
     def __init__(self, app_dir: Path):
         super().__init__(); self.app_dir=app_dir; self.config_path=app_dir/"config.py"; self.existing=_load_existing(self.config_path)
-        self.title(f"RadioBOSS SongSync Setup v{VERSION}"); self.geometry("800x650"); self.minsize(720,580); self.result=False
+        self.title(f"RadioBOSS SongSync Setup v{VERSION}"); self.geometry("820x720"); self.minsize(740,640); self.result=False
         self._make_variables(); self.db_test_status=tk.StringVar(value="Not tested yet."); self.sftp_test_status=tk.StringVar(value="Not tested yet."); self.notebook=ttk.Notebook(self); self.notebook.pack(fill="both",expand=True,padx=12,pady=(12,4))
         self._database_tab(); self._export_tab(); self._sftp_tab(); self._review_tab()
         bottom=ttk.Frame(self); bottom.pack(fill="x",padx=12,pady=10)
@@ -217,6 +219,7 @@ class SetupWizard(tk.Tk):
             "db_user":tk.StringVar(value=str(self._v("DB_USER","radioboss_readonly"))), "db_password":tk.StringVar(value=str(self._v("DB_PASSWORD",""))),
             "db_charset":tk.StringVar(value=str(self._v("DB_CHARSET","utf8mb4"))), "public_export_dir":tk.StringVar(value=str(self._v("PUBLIC_EXPORT_DIR","exports/public"))),
             "private_export_dir":tk.StringVar(value=str(self._v("PRIVATE_EXPORT_DIR","exports/private"))), "show_examples":tk.BooleanVar(value=bool(self._v("SHOW_EXAMPLES",True))),
+            "scheduler_export_enabled":tk.BooleanVar(value=bool(self._v("SCHEDULER_EXPORT_ENABLED",False))), "scheduler_sdl_file":tk.StringVar(value=str(self._v("SCHEDULER_SDL_FILE",""))),
             "example_limit":tk.StringVar(value=str(self._v("EXAMPLE_LIMIT",10))), "sftp_enabled":tk.BooleanVar(value=bool(self._v("SFTP_ENABLED",False))),
             "sftp_host":tk.StringVar(value=str(self._v("SFTP_HOST","your-sftp-server.example"))), "sftp_port":tk.StringVar(value=str(self._v("SFTP_PORT",22))),
             "sftp_username":tk.StringVar(value=str(self._v("SFTP_USERNAME",""))), "sftp_password":tk.StringVar(value=str(self._v("SFTP_PASSWORD",""))),
@@ -253,6 +256,10 @@ class SetupWizard(tk.Tk):
         tab=ttk.Frame(self.notebook); self.notebook.add(tab,text="2. Exports")
         box=ttk.LabelFrame(tab,text="Local JSON export"); box.pack(fill="x",padx=12,pady=12)
         self._row(box,0,"Public export directory",self.vars["public_export_dir"]); self._row(box,1,"Private export directory",self.vars["private_export_dir"])
+        scheduler=ttk.LabelFrame(tab,text="Private scheduler-event export"); scheduler.pack(fill="x",padx=12,pady=8)
+        ttk.Checkbutton(scheduler,text="Export playlist events for Radio Music Analytics",variable=self.vars["scheduler_export_enabled"]).grid(row=0,column=0,columnspan=3,sticky="w",padx=8,pady=6)
+        self._row(scheduler,1,"RadioBOSS Admin.sdl",self.vars["scheduler_sdl_file"],browse=self._browse_sdl)
+        ttk.Label(scheduler,text="Only path-safe event metadata is exported; local Windows paths remain private.",wraplength=700).grid(row=2,column=0,columnspan=3,sticky="w",padx=8,pady=(2,8))
         ttk.Checkbutton(tab,text="Show example catalog entries after export",variable=self.vars["show_examples"]).pack(anchor="w",padx=20,pady=10)
         line=ttk.Frame(tab); line.pack(fill="x",padx=20); ttk.Label(line,text="Number of examples").pack(side="left"); ttk.Entry(line,textvariable=self.vars["example_limit"],width=10).pack(side="left",padx=10)
         ttk.Label(tab,text="Public files contain the searchable catalog. Private files contain the filename lookup and must not be publicly downloadable.",wraplength=700).pack(anchor="w",padx=20,pady=18)
@@ -285,6 +292,9 @@ class SetupWizard(tk.Tk):
         if p:
             try:self.vars["sftp_private_key_file"].set(str(Path(p).resolve().relative_to(self.app_dir.resolve())))
             except ValueError:self.vars["sftp_private_key_file"].set(p)
+    def _browse_sdl(self):
+        p=filedialog.askopenfilename(title="Select RadioBOSS Admin.sdl",filetypes=[("RadioBOSS scheduler","*.sdl"),("All files","*.*")])
+        if p:self.vars["scheduler_sdl_file"].set(p)
     def _detect_sqlite(self):
         c=find_sqlite_candidates()
         if not c: messagebox.showwarning("SQLite detection","No RadioBOSS tracks.db database was found."); return
@@ -358,7 +368,7 @@ class SetupWizard(tk.Tk):
                 pass
     def _refresh_review(self):
         if self.notebook.index(self.notebook.select())!=3:return
-        v=self.values(); lines=[f"Database type: {v['db_type']}",f"SQLite mode: {v['sqlite_mode']}",f"SQLite database: {v['sqlite_database']}","",f"Public export: {v['public_export_dir']}",f"Private export: {v['private_export_dir']}","",f"SFTP enabled: {'Yes' if v['sftp_enabled'] else 'No'}",f"SFTP host: {v['sftp_host'] if v['sftp_enabled'] else '-'}",f"SFTP user: {v['sftp_username'] if v['sftp_enabled'] else '-'}",f"Remote public: {v['sftp_remote_public_dir'] if v['sftp_enabled'] else '-'}",f"Remote private: {v['sftp_remote_private_dir'] if v['sftp_enabled'] else '-'}","","Passwords are hidden from this review."]
+        v=self.values(); lines=[f"Database type: {v['db_type']}",f"SQLite mode: {v['sqlite_mode']}",f"SQLite database: {v['sqlite_database']}","",f"Public export: {v['public_export_dir']}",f"Private export: {v['private_export_dir']}",f"Scheduler export: {'Yes' if v['scheduler_export_enabled'] else 'No'}",f"Scheduler SDL: {v['scheduler_sdl_file'] if v['scheduler_export_enabled'] else '-'}","",f"SFTP enabled: {'Yes' if v['sftp_enabled'] else 'No'}",f"SFTP host: {v['sftp_host'] if v['sftp_enabled'] else '-'}",f"SFTP user: {v['sftp_username'] if v['sftp_enabled'] else '-'}",f"Remote public: {v['sftp_remote_public_dir'] if v['sftp_enabled'] else '-'}",f"Remote private: {v['sftp_remote_private_dir'] if v['sftp_enabled'] else '-'}","","Passwords are hidden from this review."]
         self.review.config(state="normal"); self.review.delete("1.0","end"); self.review.insert("1.0","\n".join(lines)); self.review.config(state="disabled")
     def _back(self):
         i=self.notebook.index(self.notebook.select()); self.notebook.select(max(0,i-1))
@@ -368,6 +378,10 @@ class SetupWizard(tk.Tk):
         v=self.values()
         if v["db_type"] not in {"sqlite","mysql"}: messagebox.showerror("Configuration","Choose SQLite or MySQL/MariaDB."); return
         if v["db_type"]=="sqlite" and v["sqlite_mode"] not in {"shared","dedicated"}: messagebox.showerror("Configuration","SQLite mode must be shared or dedicated."); return
+        if v["scheduler_export_enabled"]:
+            configured=Path(v["scheduler_sdl_file"].strip()).expanduser()
+            if not configured.is_absolute(): configured=self.app_dir/configured
+            if not configured.is_file() or configured.suffix.lower()!=".sdl": messagebox.showerror("Configuration","Select an existing RadioBOSS .sdl file for scheduler export."); return
         if v["sftp_enabled"]:
             missing=[n for n,val in [("SFTP host",v["sftp_host"]),("SFTP username",v["sftp_username"]),("Remote public directory",v["sftp_remote_public_dir"]),("Remote private directory",v["sftp_remote_private_dir"])] if not str(val).strip()]
             if missing: messagebox.showerror("Configuration","Missing: "+", ".join(missing)); return

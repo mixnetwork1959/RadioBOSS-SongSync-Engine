@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.6.0
+# Version 1.7.0
 # songsync.py
 # ==========================================================
 
@@ -23,6 +23,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Iterable
 
+from scheduler_export import create_scheduler_payload
+
 try:
     import mysql.connector
     from mysql.connector import Error as MySQLError
@@ -41,7 +43,7 @@ except ImportError:
     raise SystemExit(1)
 
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 
 def application_dir() -> Path:
@@ -167,6 +169,7 @@ INFO_FILE = PUBLIC_DIR / "info.json"
 
 LOOKUP_FILE = PRIVATE_DIR / "lookup.json"
 DUPLICATE_LOG_FILE = PRIVATE_DIR / "duplicates.log"
+SCHEDULER_EVENTS_FILE = PRIVATE_DIR / "scheduler-events.json"
 
 
 @dataclass(frozen=True)
@@ -509,6 +512,28 @@ def remote_join(directory: str, filename: str) -> str:
     return posixpath.join(directory, filename)
 
 
+def configured_sftp_uploads() -> list[tuple[Path, str]]:
+    public_dir = str(CONFIG.SFTP_REMOTE_PUBLIC_DIR)
+    private_dir = str(CONFIG.SFTP_REMOTE_PRIVATE_DIR)
+    uploads = [
+        (SONGS_FILE, remote_join(public_dir, SONGS_FILE.name)),
+        (ARTISTS_FILE, remote_join(public_dir, ARTISTS_FILE.name)),
+        (GENRES_FILE, remote_join(public_dir, GENRES_FILE.name)),
+        (INFO_FILE, remote_join(public_dir, INFO_FILE.name)),
+        (LOOKUP_FILE, remote_join(private_dir, LOOKUP_FILE.name)),
+    ]
+
+    if bool(getattr(CONFIG, "SCHEDULER_EXPORT_ENABLED", False)):
+        uploads.append(
+            (
+                SCHEDULER_EVENTS_FILE,
+                remote_join(private_dir, SCHEDULER_EVENTS_FILE.name),
+            )
+        )
+
+    return uploads
+
+
 def known_host_name(host: str, port: int) -> str:
     return host if port == 22 else f"[{host}]:{port}"
 
@@ -637,13 +662,7 @@ async def upload_exports_async() -> None:
                     f"Remote private directory does not exist: {private_dir}"
                 )
 
-            uploads = [
-                (SONGS_FILE, remote_join(public_dir, SONGS_FILE.name)),
-                (ARTISTS_FILE, remote_join(public_dir, ARTISTS_FILE.name)),
-                (GENRES_FILE, remote_join(public_dir, GENRES_FILE.name)),
-                (INFO_FILE, remote_join(public_dir, INFO_FILE.name)),
-                (LOOKUP_FILE, remote_join(private_dir, LOOKUP_FILE.name)),
-            ]
+            uploads = configured_sftp_uploads()
 
             for local_path, remote_path in uploads:
                 if not local_path.is_file():
@@ -700,13 +719,7 @@ def upload_exports_openssh() -> None:
     public_dir = str(CONFIG.SFTP_REMOTE_PUBLIC_DIR)
     private_dir = str(CONFIG.SFTP_REMOTE_PRIVATE_DIR)
 
-    uploads = [
-        (SONGS_FILE, remote_join(public_dir, SONGS_FILE.name)),
-        (ARTISTS_FILE, remote_join(public_dir, ARTISTS_FILE.name)),
-        (GENRES_FILE, remote_join(public_dir, GENRES_FILE.name)),
-        (INFO_FILE, remote_join(public_dir, INFO_FILE.name)),
-        (LOOKUP_FILE, remote_join(private_dir, LOOKUP_FILE.name)),
-    ]
+    uploads = configured_sftp_uploads()
 
     batch_lines = [
         f"ls {sftp_batch_quote(public_dir)}",
@@ -864,6 +877,24 @@ def write_exports(
     atomic_json_write(INFO_FILE, info)
 
 
+def write_scheduler_events_export() -> dict | None:
+    if not bool(getattr(CONFIG, "SCHEDULER_EXPORT_ENABLED", False)):
+        return None
+
+    configured_path = str(
+        getattr(CONFIG, "SCHEDULER_SDL_FILE", "")
+    ).strip()
+    if not configured_path:
+        raise RuntimeError(
+            "SCHEDULER_SDL_FILE is required when scheduler export is enabled."
+        )
+
+    sdl_path = resolve_local_path(configured_path)
+    payload = create_scheduler_payload(sdl_path, VERSION)
+    atomic_json_write(SCHEDULER_EVENTS_FILE, payload)
+    return payload
+
+
 def write_duplicate_log(
     duplicate_groups: dict[tuple[str, str], list[Song]],
 ) -> None:
@@ -895,6 +926,7 @@ def print_report(
     usable_songs: list[Song],
     unique_songs: list[Song],
     duplicate_groups: dict[tuple[str, str], list[Song]],
+    scheduler_payload: dict | None,
 ) -> None:
     missing_filename = sum(1 for song in all_songs if not song.filename)
     missing_metadata = sum(
@@ -946,6 +978,12 @@ def print_report(
     print("Private files:")
     print(f"  {LOOKUP_FILE.resolve()}")
     print(f"  {DUPLICATE_LOG_FILE.resolve()}")
+    if scheduler_payload is not None:
+        print(f"  {SCHEDULER_EVENTS_FILE.resolve()}")
+        print(
+            "  Scheduler playlist events: "
+            f"{int(scheduler_payload.get('event_count', 0))}"
+        )
     print()
     print("Export completed. No RadioBOSS data was changed.")
 
@@ -988,12 +1026,14 @@ def main() -> int:
             duplicate_groups,
         )
         write_duplicate_log(duplicate_groups)
+        scheduler_payload = write_scheduler_events_export()
 
         print_report(
             all_songs,
             usable_songs,
             unique_songs,
             duplicate_groups,
+            scheduler_payload,
         )
 
         upload_exports_sftp()

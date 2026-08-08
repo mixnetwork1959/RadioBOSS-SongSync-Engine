@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.7.0
+
+- Added an optional local RadioBOSS `.sdl` scheduler export.
+- Added detection for `generate`, `getrandomplaylist`, loaded playlists and
+  direct M3U/M3U8/PLS playlist events.
+- Added path-safe `scheduler-events.json` output without complete local paths.
+- Added optional upload of the scheduler file to the private SFTP directory.
+- Added Setup Wizard controls for enabling the export and selecting the SDL.
+- Added unit tests and GitHub validation for scheduler parsing.
+- Kept the scheduler feature disabled by default for existing installations.
+
 ## 1.6.0
 
 - Added graphical Windows Setup Wizard.
