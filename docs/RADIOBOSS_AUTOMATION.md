@@ -4,7 +4,7 @@ This guide explains how to run SongSync automatically from the RadioBOSS Schedul
 
 Before creating an automatic event, confirm that both operations work manually:
 
-1. MySQL export
+1. Database export (SQLite or MySQL/MariaDB)
 2. SFTP upload
 
 A successful manual run must end with:
@@ -21,7 +21,7 @@ The batch file:
 
 1. Opens the SongSync directory
 2. Starts `RadioBOSS-SongSync.exe` or the Python source version
-3. Reads the RadioBOSS MySQL library
+3. Reads the selected RadioBOSS library
 4. Generates the JSON catalog
 5. Uploads the files using SFTP
 6. Closes automatically
@@ -37,7 +37,7 @@ run_songsync.bat
         v
 RadioBOSS-SongSync.exe
         |
-        +-- MySQL export
+        +-- Database export
         |
         +-- JSON generation
         |
@@ -49,7 +49,7 @@ RadioBOSS-SongSync.exe
 - RadioBOSS computer remains switched on
 - SongSync works manually
 - `config.py` is complete
-- MySQL is available
+- The selected RadioBOSS database is available
 - Internet connection is available
 - SFTP authentication works
 - The RadioBOSS Scheduler is enabled
@@ -181,7 +181,7 @@ run cmd.exe /c "D:\Path With Spaces\run_songsync.bat"
 Run SongSync at a quiet time when:
 
 - The RadioBOSS computer is running
-- MySQL is available
+- The selected RadioBOSS database is available
 - No database maintenance is running
 - Internet access is normally available
 
@@ -309,9 +309,9 @@ The next automatic run remains unaffected.
 
 ## Failure behavior
 
-### MySQL connection fails
+### Database connection fails
 
-If MySQL cannot be read:
+If the selected database cannot be read:
 
 - New JSON files are not completed
 - SFTP upload does not start
@@ -448,7 +448,7 @@ Regularly check:
 - SFTP authentication
 - RadioBOSS Scheduler event status
 - Available disk space
-- MySQL availability
+- Database availability
 
 After changing credentials or paths, always run a manual test.
 

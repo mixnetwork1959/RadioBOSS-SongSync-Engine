@@ -1,6 +1,6 @@
 # RadioBOSS SongSync Engine
 
-**Version 1.4.2**
+**Version 1.5.0**
 
 RadioBOSS SongSync Engine reads the RadioBOSS music library from its standard SQLite database or from MySQL/MariaDB and generates secure JSON catalog files for the [RadioBOSS Song Request System](https://github.com/mixnetwork1959/radioboss-song-request-system).
 
@@ -14,7 +14,7 @@ It can automatically upload the generated catalog to a web server using SFTP.
 
 Windows users can run SongSync without installing Python or additional packages.
 
-1. Download `SongSync.zip` from the latest GitHub release.
+1. Download `RadioBOSS-SongSync-v1.5.0.zip` from the latest GitHub release.
 2. Extract the ZIP file to a permanent directory, for example:
 
    ```text
@@ -24,7 +24,7 @@ Windows users can run SongSync without installing Python or additional packages.
 3. Start:
 
    ```text
-   SongSync.exe
+   RadioBOSS-SongSync.exe
    ```
 
    On the first start, SongSync automatically creates `config.py` from
@@ -40,7 +40,7 @@ Windows users can run SongSync without installing Python or additional packages.
 6. Start SongSync again:
 
    ```text
-   SongSync.exe
+   RadioBOSS-SongSync.exe
    ```
 
 The generated catalog files are written to the local `exports` directory. If SFTP is enabled, the files are uploaded automatically after a successful export.
@@ -82,6 +82,7 @@ Both projects are required for the complete web-based request system:
 - Excludes tracks without artist, title or filename
 - Removes duplicate artist/title combinations
 - Creates a public song catalog
+- Exports play count, last-played time and play history for each song
 - Creates artist and genre lists
 - Creates catalog information and statistics
 - Creates a private RadioBOSS filename lookup
@@ -108,20 +109,29 @@ exports/public/genres.json
 exports/public/info.json
 ```
 
-`songs.json` contains only:
+`songs.json` contains:
 
 - Track ID
 - Artist
 - Title
+- Play count
+- Last-played time
+- Play history
 
 Example:
 
 ```json
 [
   {
-    "track_id": 11698,
-    "artist": "2pac",
-    "title": "Dear Mama"
+    "track_id": 1234,
+    "artist": "Example Artist",
+    "title": "Example Title",
+    "plays": 42,
+    "last_played": "2026-08-05 13:42:17",
+    "play_history": [
+      "2026-08-05 13:42:17",
+      "2026-08-04 09:11:02"
+    ]
   }
 ]
 ```
@@ -141,8 +151,8 @@ Example:
 
 ```json
 {
-  "11698": {
-    "filename": "D:\\Music\\Pop\\2pac - Dear Mama.mp3"
+  "1234": {
+    "filename": "D:\\Music\\Example Artist - Example Title.mp3"
   }
 }
 ```
@@ -281,7 +291,7 @@ When enabled, SongSync displays a small selection of public catalog entries afte
 Windows EXE:
 
 ```text
-SongSync.exe
+RadioBOSS-SongSync.exe
 ```
 
 Python source version:
@@ -408,8 +418,8 @@ Example:
 @echo off
 cd /d "%~dp0"
 
-if exist "SongSync.exe" (
-    SongSync.exe
+if exist "RadioBOSS-SongSync.exe" (
+    RadioBOSS-SongSync.exe
 ) else (
     py songsync.py
 )
@@ -557,7 +567,7 @@ Private and generated files are not included in the repository.
 ## Current versions
 
 ```text
-SongSync Engine:              1.4.2
+SongSync Engine:              1.5.0
 SQLite support:               Built into Python
 MySQL connector (optional):   9.x
 SFTP library:                 AsyncSSH 2.20 or newer

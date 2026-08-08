@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.4.2
+# Version 1.5.0
 # songsync.py
 # ==========================================================
 
@@ -41,7 +41,7 @@ except ImportError:
     raise SystemExit(1)
 
 
-VERSION = "1.4.2"
+VERSION = "1.5.0"
 
 
 def application_dir() -> Path:
@@ -72,7 +72,7 @@ def load_config():
         if not example_path.is_file():
             print(f"ERROR: config.py was not found in: {APP_DIR}")
             print("ERROR: config.example.py was not found either.")
-            print("Place config.example.py in the same folder as SongSync.exe.")
+            print("Place config.example.py in the same folder as RadioBOSS-SongSync.exe.")
             raise SystemExit(1)
 
         try:
@@ -181,6 +181,9 @@ class Song:
     title: str
     filename: str
     genre: str
+    playcount: int
+    lastplayed: str
+    play_history: tuple[str, ...]
     valid: int | None
     disabled: int | None
 
@@ -190,6 +193,25 @@ class Song:
             normalize_text(self.artist),
             normalize_text(self.title),
         )
+
+
+
+def normalize_datetime_value(value) -> str:
+    if value is None:
+        return ""
+
+    if isinstance(value, datetime):
+        return value.isoformat(sep=" ", timespec="seconds")
+
+    return str(value).strip()
+
+
+def parse_play_history(value) -> tuple[str, ...]:
+    if value is None:
+        return ()
+
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    return tuple(line.strip() for line in text.split("\n") if line.strip())
 
 
 def normalize_text(value: str) -> str:
@@ -331,6 +353,9 @@ def load_songs(connection) -> list[Song]:
             t.fn AS filename,
             t.valid,
             t.disablesong,
+            COALESCE(t.playcount, 0) AS playcount,
+            t.lastplayed,
+            t.lastplayedhistory,
             COALESCE(i.artist, '') AS artist,
             COALESCE(i.title, '') AS title,
             COALESCE(i.genre, '') AS genre
@@ -356,6 +381,9 @@ def load_songs(connection) -> list[Song]:
                 title=(row["title"] or "").strip(),
                 filename=(row["filename"] or "").strip(),
                 genre=(row["genre"] or "").strip(),
+                playcount=max(0, int(row["playcount"] or 0)),
+                lastplayed=normalize_datetime_value(row["lastplayed"]),
+                play_history=parse_play_history(row["lastplayedhistory"]),
                 valid=row["valid"],
                 disabled=row["disablesong"],
             )
@@ -774,7 +802,8 @@ def catalog_hash(unique_songs: list[Song]) -> str:
     for song in unique_songs:
         row = (
             f"{song.track_id}\0{song.artist}\0{song.title}\0"
-            f"{song.filename}\0{song.genre}\n"
+            f"{song.filename}\0{song.genre}\0{song.playcount}\0"
+            f"{song.lastplayed}\0{'|'.join(song.play_history)}\n"
         )
         digest.update(row.encode("utf-8"))
 
@@ -794,6 +823,9 @@ def write_exports(
             "track_id": song.track_id,
             "artist": song.artist,
             "title": song.title,
+            "plays": song.playcount,
+            "last_played": song.lastplayed,
+            "play_history": list(song.play_history),
         }
         for song in unique_songs
     ]

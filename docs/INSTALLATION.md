@@ -1,6 +1,6 @@
 # RadioBOSS SongSync Engine – Installation Guide
 
-This guide explains how to install RadioBOSS SongSync Engine, connect it to the RadioBOSS MySQL library and create the first JSON catalog.
+This guide explains how to install RadioBOSS SongSync Engine, connect it to a RadioBOSS SQLite or MySQL/MariaDB library and create the first JSON catalog.
 
 For SFTP configuration, see:
 
@@ -13,8 +13,8 @@ For automatic daily execution, see:
 ## Requirements
 
 - Windows 10 or Windows 11
-- RadioBOSS with a MySQL music library
-- MySQL credentials with read access
+- RadioBOSS using its standard SQLite library or MySQL/MariaDB
+- Read access to the selected RadioBOSS database
 - Internet access for optional SFTP uploads
 
 The recommended Windows EXE does not require Python.
@@ -22,7 +22,7 @@ The recommended Windows EXE does not require Python.
 Python 3.10 or newer is required only when running SongSync from
 the source code.
 
-SongSync reads these RadioBOSS MySQL tables:
+SongSync reads these RadioBOSS database tables:
 
 ```text
 tracks2
@@ -39,7 +39,7 @@ https://github.com/mixnetwork1959/RadioBOSS-SongSync-Engine/releases
 
 Choose one of these downloads:
 
-- `RadioBOSS-SongSync-Windows-v1.3.0.zip` for the recommended
+- `RadioBOSS-SongSync-v1.5.0.zip` for the recommended
   Windows EXE
 - Source code for users who want to run SongSync with Python
 
@@ -295,8 +295,9 @@ py songsync.py
 A normal start looks similar to:
 
 ```text
-RadioBOSS SongSync Engine v1.3.0
-Connecting to RadioBOSS MySQL database...
+RadioBOSS SongSync Engine v1.5.0
+Database: <selected SQLite or MySQL/MariaDB database>
+Connecting to RadioBOSS database...
 Connection successful.
 Reading tracks2 and taginfo...
 Creating unique song catalog...
@@ -352,7 +353,13 @@ Contains the public search catalog:
   {
     "track_id": 11698,
     "artist": "2pac",
-    "title": "Dear Mama"
+    "title": "Dear Mama",
+    "plays": 42,
+    "last_played": "2026-08-05 13:42:17",
+    "play_history": [
+      "2026-08-05 13:42:17",
+      "2026-08-04 09:11:02"
+    ]
   }
 ]
 ```

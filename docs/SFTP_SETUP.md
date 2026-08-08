@@ -365,7 +365,7 @@ If an upload fails:
 - SongSync displays an error
 - The next successful run can upload the catalog again
 
-## STRATO setup summary
+## Optional example: STRATO setup summary
 
 STRATO normally provides:
 
