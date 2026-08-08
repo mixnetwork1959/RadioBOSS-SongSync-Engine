@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.0
+
+- Added graphical Windows Setup Wizard.
+- Added automatic SQLite database detection.
+- Added SQLite and MySQL/MariaDB connection tests.
+- Added guided SFTP configuration and connection test.
+- Added password and SSH private-key authentication setup.
+- Updated MySQL Connector packaging for PyInstaller compatibility.
+- Normal `RadioBOSS-SongSync.exe` now runs without a CMD window.
+- Normal runs write status and errors to `songsync.log`.
+- Added automatic log rotation to `songsync-old.log`.
+- Added `RadioBOSS-SongSync-Debug.exe` for console troubleshooting.
+- Kept manual `config.example.py` configuration fully supported.
+
+# Changelog
+
 ## v1.5.0
 
 - Added improved Windows OpenSSH support for SSH private-key SFTP uploads.

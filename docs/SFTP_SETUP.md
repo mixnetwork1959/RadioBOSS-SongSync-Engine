@@ -456,7 +456,7 @@ https://example.com/songrequest/data/public
 Correct format:
 
 ```text
-/home/www/public/songrequest/data/public
+/path/to/webroot/songrequest/data/public
 ```
 
 The exact path depends on the hosting provider.

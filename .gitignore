@@ -37,3 +37,8 @@ build/
 dist/
 *.spec
 *.exe
+
+songsync.log
+songsync-old.log
+setup-debug.log
+setup-error.log

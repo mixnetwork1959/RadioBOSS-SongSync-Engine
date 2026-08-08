@@ -1,2 +1,2 @@
-mysql-connector-python>=9.0,<10.0
-asyncssh>=2.20
+mysql-connector-python==9.7.0
+asyncssh==2.24.0

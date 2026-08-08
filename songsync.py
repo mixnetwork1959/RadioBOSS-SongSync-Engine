@@ -1,6 +1,6 @@
 # ==========================================================
 # RadioBOSS SongSync Engine
-# Version 1.5.0
+# Version 1.6.0
 # songsync.py
 # ==========================================================
 
@@ -41,7 +41,7 @@ except ImportError:
     raise SystemExit(1)
 
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 
 def application_dir() -> Path:
@@ -65,26 +65,21 @@ def resolve_local_path(value: str) -> Path:
 
 def load_config():
     config_path = APP_DIR / "config.py"
+    open_setup = "--setup" in sys.argv
+
+    if open_setup or not config_path.is_file():
+        try:
+            from setup_wizard import run_setup
+        except Exception as exc:
+            if not config_path.is_file():
+                print("ERROR: Setup Wizard could not be loaded.")
+                print(f"{type(exc).__name__}: {exc}")
+                raise SystemExit(1) from exc
+        else:
+            if not run_setup(APP_DIR):
+                raise SystemExit(0)
 
     if not config_path.is_file():
-        example_path = APP_DIR / "config.example.py"
-
-        if not example_path.is_file():
-            print(f"ERROR: config.py was not found in: {APP_DIR}")
-            print("ERROR: config.example.py was not found either.")
-            print("Place config.example.py in the same folder as RadioBOSS-SongSync.exe.")
-            raise SystemExit(1)
-
-        try:
-            shutil.copyfile(example_path, config_path)
-        except OSError as exc:
-            print("ERROR: config.py could not be created:")
-            print(f"{type(exc).__name__}: {exc}")
-            raise SystemExit(1) from exc
-
-        print("config.py was created successfully.")
-        print(f"Location: {config_path}")
-        print("Enter your settings in config.py, then start SongSync again.")
         raise SystemExit(1)
 
     try:
